@@ -1,0 +1,271 @@
+# Creating a hierarchical-relational model for the discussed AI concepts,
+# computing centralities and composite "value" (benefit − risk) scores,
+# and running scenario (variable) experiments.
+#
+# This notebook produces tables and charts for the base model and scenarios.
+# NOTE: All numeric weights and influence values are expert-estimate / assumptions
+# for modeling and demonstration purposes. They are labelled as [Inference/Unverified]
+# in the accompanying textual explanation.
+#
+# Uses: numpy, pandas, matplotlib. Uses caas_jupyter_tools.display_dataframe_to_user
+# to show interactive tables to the user.
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from math import isclose
+
+# helper for display (the environment provides caas_jupyter_tools)
+try:
+    from caas_jupyter_tools import display_dataframe_to_user
+except Exception:
+    display_dataframe_to_user = None
+
+# Define nodes (concepts)
+nodes = [
+    "DeepLearning_LeCun2015",        # DL foundations
+    "Transformers_Vaswani2017",      # Transformer architecture
+    "LearningTheory_Shalev2014",     # PAC/VC/Rademacher
+    "Causality_Pearl2009",           # SCM, do-calculus
+    "DifferentialPrivacy_Dwork2014", # DP
+    "Adversarial_Goodfellow2015",    # Adversarial examples
+    "Generalization_Recht2019",      # Reproducibility / OOD generalization
+    "ScalingLaws_Kaplan2020",        # Scaling laws
+    "FoundationModels_BrownBommasani" # GPT-3 / Foundation models report
+]
+
+n = len(nodes)
+
+# Baseline importance (0-1) [Inference]
+baseline = np.array([
+    0.90,  # DL
+    0.85,  # Transformers
+    0.60,  # Learning theory
+    0.60,  # Causality
+    0.50,  # Differential privacy
+    0.60,  # Adversarial
+    0.55,  # Generalization/Repro
+    0.75,  # Scaling laws
+    0.80   # Foundation models
+])
+
+# Benefit and risk intrinsic scores (0-1) for each node [Inference]
+benefit = np.array([
+    0.90,  # DL
+    0.80,  # Transformers
+    0.70,  # Learning theory
+    0.80,  # Causality
+    0.60,  # DP
+    0.40,  # Adversarial (has technical value but also highlights vulnerability)
+    0.70,  # Generalization
+    0.60,  # Scaling laws
+    0.75   # Foundation models
+])
+
+risk = np.array([
+    0.20,  # DL
+    0.30,  # Transformers
+    0.10,  # Learning theory
+    0.05,  # Causality
+    0.05,  # DP (intended to reduce risk)
+    0.70,  # Adversarial (high risk vector)
+    0.20,  # Generalization (risk if poor)
+    0.60,  # Scaling laws (resource/centralization risk)
+    0.70   # Foundation models (centralization, bias, energy)
+])
+
+# Adjacency influence matrix W (row -> column): how node i influences node j
+# Range [-1,1]. Positive = increases, Negative = decreases.
+W = np.zeros((n,n))
+
+# Manually populate with assumed influences [Inference]
+# Deep Learning influences many
+W[0,1] = 0.60  # DL -> Transformers
+W[0,2] = 0.50  # DL -> LearningTheory (mutual influence)
+W[0,5] = 0.30  # DL -> Adversarial (enables discovery)
+W[0,8] = 0.50  # DL -> FoundationModels
+
+# Transformers influence
+W[1,8] = 0.80  # Transformers -> FoundationModels
+W[1,6] = 0.40  # Transformers -> Generalization (mixed)
+W[1,5] = 0.20  # Transformers -> Adversarial (creates new attack surface)
+
+# Learning Theory influences
+W[2,0] = 0.30  # Theory -> DL (guides regularization)
+W[2,6] = 0.60  # Theory -> Generalization (positive)
+W[2,4] = 0.25  # Theory -> DP
+
+# Causality influences
+W[3,6] = 0.50  # Causality -> Generalization (improves transfer)
+W[3,2] = 0.20  # Causality -> Theory
+W[3,8] = 0.10  # Causality -> Scaling (minor)
+
+# Differential Privacy influences
+W[4,8] = -0.10 # DP -> Scaling (privacy constraints reduce some scaling benefits)
+W[4,6] = 0.20  # DP -> Generalization (can improve robustness to memorization)
+
+# Adversarial influences
+W[5,0] = -0.10 # Adversarial discoveries push DL towards robustness (negative influence on naive DL)
+W[5,6] = -0.40 # Adversarial -> Generalization (hurts naive generalization)
+
+# Generalization influences
+W[6,0] = 0.10  # Good generalization informs DL
+W[6,1] = 0.05  # affects choice of architectures
+
+# Scaling Laws influences
+W[7,8] = 0.70  # Scaling -> FoundationModels (enables)
+W[7,1] = 0.10  # Scaling -> Transformers (prefers parallelizable archs)
+W[7,0] = 0.05  # scaling -> DL
+
+# Foundation Models influences
+W[8,6] = -0.25 # FoundationModels -> Generalization (can harm localized generalization due to homogenization)
+W[8,4] = -0.10 # FM -> DP (pressure against privacy due to centralized data)
+W[8,5] = 0.30  # FM -> Adversarial (new vulnerabilities)
+W[8,3] = -0.05 # FM -> Causality (doesn't automatically provide causal reasoning)
+
+# Ensure diagonal zero
+np.fill_diagonal(W, 0.0)
+
+# Function to compute eigenvector centrality-style score (principal eigenvector of |W|)
+def centrality_from_W(W):
+    M = np.abs(W)
+    # add small epsilon to avoid zero matrix issues
+    A = M + 1e-8
+    vals, vecs = np.linalg.eig(A)
+    idx = np.argmax(np.real(vals))
+    v = np.real(vecs[:, idx])
+    # normalize
+    if np.allclose(v,0):
+        return np.ones(len(v))/len(v)
+    v = np.abs(v)
+    v = v / np.max(v)
+    return v
+
+centrality = centrality_from_W(W)
+
+# Composite score per node: baseline * (benefit - risk) + 0.2 * centrality
+composite_base = baseline * (benefit - risk) + 0.2 * centrality
+
+# Create dataframe of baseline model
+df_base = pd.DataFrame({
+    "node": nodes,
+    "level": ["Foundations","Architecture","Foundations","Foundations","Methods","Methods","Outcome","Meta","Meta"],
+    "baseline_importance": baseline,
+    "benefit": benefit,
+    "risk": risk,
+    "centrality": centrality,
+    "composite_score": composite_base
+})
+
+# Scenarios to experiment with (modify baseline or W and recompute)
+scenarios = {}
+
+# Scenario A: Increase emphasis on Scaling Laws (+50% baseline)
+scenarioA_baseline = baseline.copy()
+scenarioA_baseline[7] *= 1.5  # scaling
+scenarioA_composite = scenarioA_baseline * (benefit - risk) + 0.2 * centrality
+scenarios['Increase_Scaling_+50pct'] = scenarioA_composite
+
+# Scenario B: Strong Privacy Constraint (increase DP importance x1.5 and reduce FM-centralization influence)
+scenarioB_baseline = baseline.copy()
+scenarioB_baseline[4] *= 1.5  # DP
+W_B = W.copy()
+W_B[8,4] -= 0.20  # reduce negative influence of FM->DP (policy/tech counters it)
+centrality_B = centrality_from_W(W_B)
+scenarioB_composite = scenarioB_baseline * (benefit - risk) + 0.2 * centrality_B
+scenarios['Strong_Privacy_DP+50pct'] = scenarioB_composite
+
+# Scenario C: Prioritize Causality (x2 emphasis on causality node)
+scenarioC_baseline = baseline.copy()
+scenarioC_baseline[3] *= 2.0  # causality emphasis
+scenarioC_composite = scenarioC_baseline * (benefit - risk) + 0.2 * centrality
+scenarios['Causality_x2'] = scenarioC_composite
+
+# Scenario D: Emphasize robustness to adversarial attacks and DP (security-oriented)
+scenarioD_baseline = baseline.copy()
+scenarioD_baseline[5] *= 1.7  # adversarial emphasis
+scenarioD_baseline[4] *= 1.3  # DP emphasis
+# Strengthen negative influence of adversarial on naive DL (push to robustness)
+W_D = W.copy()
+W_D[5,0] = -0.25
+centrality_D = centrality_from_W(W_D)
+scenarioD_composite = scenarioD_baseline * (benefit - risk) + 0.2 * centrality_D
+scenarios['Robustness_DP_focus'] = scenarioD_composite
+
+# Scenario E: Aggressive Foundation Model scaling (increase FM and scaling)
+scenarioE_baseline = baseline.copy()
+scenarioE_baseline[8] *= 1.4
+scenarioE_baseline[7] *= 1.3
+# Increase FM negative effects on privacy and generalization
+W_E = W.copy()
+W_E[8,4] -= 0.15
+W_E[8,6] -= 0.20
+centrality_E = centrality_from_W(W_E)
+scenarioE_composite = scenarioE_baseline * (benefit - risk) + 0.2 * centrality_E
+scenarios['Aggressive_FM_Scaling'] = scenarioE_composite
+
+# Build dataframe for scenarios
+df_scenarios = pd.DataFrame({k: v for k, v in scenarios.items()}, index=nodes).reset_index()
+df_scenarios.rename(columns={"index":"node"}, inplace=True)
+
+# Display results using provided helper if available, else print head
+if display_dataframe_to_user is not None:
+    display_dataframe_to_user("Hierarchical relational baseline", df_base)
+    display_dataframe_to_user("Scenario composites (columns are scenarios)", df_scenarios)
+else:
+    print("BASE MODEL")
+    print(df_base.to_string(index=False))
+    print("\nSCENARIOS (composite scores):")
+    print(df_scenarios.to_string(index=False))
+
+# Plot composite score comparison (base vs scenarios)
+plt.figure(figsize=(10,6))
+labels = nodes
+x = np.arange(len(labels))
+width = 0.12
+
+plt.bar(x - 2*width, composite_base, width)
+plt.bar(x - width, scenarios['Increase_Scaling_+50pct'], width)
+plt.bar(x, scenarios['Strong_Privacy_DP+50pct'], width)
+plt.bar(x + width, scenarios['Causality_x2'], width)
+plt.bar(x + 2*width, scenarios['Aggressive_FM_Scaling'], width)
+plt.xticks(x, labels, rotation=80)
+plt.title("Composite node scores: base vs selected scenarios\n(Composite = baseline*(benefit-risk) + 0.2*centrality)")
+plt.tight_layout()
+
+# Save plot to file for download if possible
+plt.savefig("/mnt/data/composite_scores_comparison.png")
+
+# Also produce a "system-level" metric: total benefit minus total risk weighted by baseline
+system_base = np.sum(baseline * (benefit - risk))
+system_scenarios = {k: np.sum((baseline.copy() if k not in ['Increase_Scaling_+50pct','Strong_Privacy_DP+50pct','Causality_x2','Robustness_DP_focus','Aggressive_FM_Scaling'] else (
+    scenarioA_baseline if k=='Increase_Scaling_+50pct' else
+    scenarioB_baseline if k=='Strong_Privacy_DP+50pct' else
+    scenarioC_baseline if k=='Causality_x2' else
+    scenarioD_baseline if k=='Robustness_DP_focus' else
+    scenarioE_baseline
+)) * (benefit - risk)) for k in scenarios.keys()}
+
+sys_df = pd.DataFrame({"scenario": ["base"] + list(system_scenarios.keys()),
+                       "system_value": [system_base] + list(system_scenarios.values())})
+
+if display_dataframe_to_user is not None:
+    display_dataframe_to_user("System-level values per scenario", sys_df)
+else:
+    print("\nSYSTEM-LEVEL VALUES")
+    print(sys_df.to_string(index=False))
+
+# Save system-level CSV
+sys_df.to_csv("/mnt/data/system_values_scenarios.csv", index=False)
+
+# Final: return a summary dict for chat response consumption
+result = {
+    "nodes": nodes,
+    "baseline_df": df_base,
+    "scenarios_df": df_scenarios,
+    "system_df": sys_df,
+    "plot_path": "/mnt/data/composite_scores_comparison.png"
+}
+
+result
+

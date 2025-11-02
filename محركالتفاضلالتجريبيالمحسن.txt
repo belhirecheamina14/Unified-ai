@@ -1,0 +1,170 @@
+import numpy as np
+
+# Toggle for high precision accumulation
+ENABLE_HIGH_PRECISION_ACCUMULATION = True
+
+class Node:
+    def __init__(self, value, children=(), op='', name='', is_param=False):
+        self.value = np.array(value, dtype=np.float32)
+        self.grad = np.zeros_like(self.value, dtype=np.float32)
+        self._prev = set(children)
+        self._backward = lambda: None
+        self.op = op
+        self.name = name
+        self.is_param = is_param
+        self._grad_accum = None
+
+    def __add__(self, other):
+        other = self._ensure_node(other)
+        out = Node(self.value + other.value, (self, other), '+')
+
+        def _backward():
+            self._accumulate_grad(np.ones_like(self.value) * out.grad)
+            other._accumulate_grad(np.ones_like(other.value) * out.grad)
+        out._backward = _backward
+        return out
+
+    def __mul__(self, other):
+        other = self._ensure_node(other)
+        out = Node(self.value * other.value, (self, other), '*')
+
+        def _backward():
+            self._accumulate_grad(other.value * out.grad)
+            other._accumulate_grad(self.value * out.grad)
+        out._backward = _backward
+        return out
+
+    def __neg__(self):
+        out = Node(-self.value, (self,), 'neg')
+
+        def _backward():
+            self._accumulate_grad(-out.grad)
+        out._backward = _backward
+        return out
+
+    def __sub__(self, other):
+        return self + (-other)
+
+    def __truediv__(self, other):
+        other = self._ensure_node(other)
+        out = Node(self.value / other.value, (self, other), '/')
+
+        def _backward():
+            self._accumulate_grad(out.grad / other.value)
+            other._accumulate_grad(-self.value / (other.value ** 2) * out.grad)
+        out._backward = _backward
+        return out
+
+    def __pow__(self, power):
+        out = Node(self.value ** power, (self,), f'**{power}')
+
+        def _backward():
+            self._accumulate_grad((power * self.value ** (power - 1)) * out.grad)
+        out._backward = _backward
+        return out
+
+    def exp(self):
+        out = Node(np.exp(self.value), (self,), 'exp')
+
+        def _backward():
+            self._accumulate_grad(out.value * out.grad)
+        out._backward = _backward
+        return out
+
+    def log(self):
+        out = Node(np.log(self.value + 1e-15), (self,), 'log')
+
+        def _backward():
+            self._accumulate_grad((1 / (self.value + 1e-15)) * out.grad)
+        out._backward = _backward
+        return out
+
+    def relu(self):
+        out = Node(np.maximum(0, self.value), (self,), 'ReLU')
+
+        def _backward():
+            self._accumulate_grad((self.value > 0).astype(np.float32) * out.grad)
+        out._backward = _backward
+        return out
+
+    def _accumulate_grad(self, grad_contrib):
+        if ENABLE_HIGH_PRECISION_ACCUMULATION:
+            if self._grad_accum is None:
+                self._grad_accum = np.zeros_like(self.value, dtype=np.float64)
+            self._grad_accum = self._grad_accum + grad_contrib.astype(np.float64)
+            self.grad = self._grad_accum.astype(self.value.dtype)
+        else:
+            self.grad = self.grad + grad_contrib.astype(self.value.dtype)
+
+    def backward(self):
+        topo = []
+        visited = set()
+
+        def build_topo(v):
+            if v not in visited:
+                visited.add(v)
+                for child in v._prev:
+                    build_topo(child)
+                topo.append(v)
+        build_topo(self)
+
+        self.grad = np.ones_like(self.value, dtype=np.float32)
+        for node in reversed(topo):
+            node._backward()
+
+    @staticmethod
+    def _ensure_node(x):
+        return x if isinstance(x, Node) else Node(x)
+
+# Optimizers
+class Optimizer:
+    def __init__(self, params, lr=0.01):
+        self.params = params
+        self.lr = lr
+
+    def step(self):
+        raise NotImplementedError
+
+    def zero_grad(self):
+        for p in self.params:
+            p.grad = np.zeros_like(p.value, dtype=np.float32)
+            p._grad_accum = None
+
+class SGD(Optimizer):
+    def step(self):
+        for p in self.params:
+            p.value = p.value - self.lr * p.grad
+
+class Adam(Optimizer):
+    def __init__(self, params, lr=0.001, betas=(0.9, 0.999), eps=1e-8):
+        super().__init__(params, lr)
+        self.betas = betas
+        self.eps = eps
+        self.m = {id(p): np.zeros_like(p.value, dtype=np.float32) for p in params}
+        self.v = {id(p): np.zeros_like(p.value, dtype=np.float32) for p in params}
+        self.t = 0
+
+    def step(self):
+        self.t += 1
+        for p in self.params:
+            g = p.grad
+            m, v = self.m[id(p)], self.v[id(p)]
+            m[...] = self.betas[0] * m + (1 - self.betas[0]) * g
+            v[...] = self.betas[1] * v + (1 - self.betas[1]) * (g * g)
+            m_hat = m / (1 - self.betas[0] ** self.t)
+            v_hat = v / (1 - self.betas[1] ** self.t)
+            p.value = p.value - self.lr * m_hat / (np.sqrt(v_hat) + self.eps)
+
+# Loss function
+def cross_entropy_loss(logits, target_index):
+    exps = np.exp(logits.value - np.max(logits.value))
+    softmax = exps / np.sum(exps)
+    loss = -np.log(softmax[target_index] + 1e-15)
+    out = Node(loss, (logits,), 'cross_entropy')
+
+    def _backward():
+        grad = softmax
+        grad[target_index] -= 1
+        logits._accumulate_grad(grad.astype(np.float32) * out.grad)
+    out._backward = _backward
+    return out
