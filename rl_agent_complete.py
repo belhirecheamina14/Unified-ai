@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents.base_agent import BaseAgent, Task, ComponentStatus
+from unified_ai_system.agents.base_agent import BaseAgent, Task, ComponentStatus
 
 logger = logging.getLogger(__name__)
 

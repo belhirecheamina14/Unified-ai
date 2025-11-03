@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+integration_*.txt
+INTEGRATION_REPORT.txt
+
+# Virtualenv
+venv/
