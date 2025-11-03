@@ -52,7 +52,7 @@ class ProjectSetup:
             "scripts"
         ]
         
-        base_path = Path("/home/ubuntu/unified_ai_system")
+        base_path = Path("./unified_ai_system")
         
         for directory in directories:
             dir_path = base_path / directory
@@ -100,7 +100,7 @@ flake8>=6.0.0
 mypy>=1.4.0
 """
         
-        req_file = Path("/home/ubuntu/unified_ai_system/requirements.txt")
+        req_file = Path("./unified_ai_system/requirements.txt")
         req_file.write_text(requirements)
         
         print("✓ requirements.txt created")
@@ -121,7 +121,7 @@ mypy>=1.4.0
                 "gpu": {"total": 1.0}
             },
             "knowledge_graph": {
-                "db_path": "/home/ubuntu/unified_ai_system/data/kg.db"
+                "db_path": "./unified_ai_system/data/kg.db"
             },
             "curriculum": {
                 "initial_level": 1,
@@ -144,7 +144,7 @@ mypy>=1.4.0
             }
         }
         
-        config_file = Path("/home/ubuntu/unified_ai_system/configs/system.yaml")
+        config_file = Path("./unified_ai_system/configs/system.yaml")
         config_file.parent.mkdir(parents=True, exist_ok=True)
         
         import yaml
@@ -372,7 +372,7 @@ def relu(x: Node) -> Node:
     return out
 '''
         
-        file_path = Path("/home/ubuntu/unified_ai_system/core/autodiff/enhanced_node.py")
+        file_path = Path("./unified_ai_system/core/autodiff/enhanced_node.py")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(code)
         
@@ -512,7 +512,7 @@ class AsyncVectorEnv:
         return env.step(action)
 '''
         
-        file_path = Path("/home/ubuntu/unified_ai_system/algorithms/rl/advanced_rl.py")
+        file_path = Path("./unified_ai_system/algorithms/rl/advanced_rl.py")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(code)
         
@@ -636,7 +636,7 @@ class LinearAlgebraSolver:
             return None, {'success': False, 'error': str(e)}
 '''
         
-        file_path = Path("/home/ubuntu/unified_ai_system/algorithms/analytical/linear_algebra.py")
+        file_path = Path("./unified_ai_system/algorithms/analytical/linear_algebra.py")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(code)
         
@@ -764,7 +764,7 @@ pytest tests/
 echo "✓ Setup completed successfully!"
 '''
         
-        file_path = Path("/home/ubuntu/unified_ai_system/scripts/setup.sh")
+        file_path = Path("./unified_ai_system/scripts/setup.sh")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(script)
         file_path.chmod(0o755)
@@ -830,7 +830,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 '''
         
-        file_path = Path("/home/ubuntu/unified_ai_system/main.py")
+        file_path = Path("./unified_ai_system/main.py")
         file_path.write_text(script)
         file_path.chmod(0o755)
         

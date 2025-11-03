@@ -1,0 +1,28 @@
+# Core dependencies
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Async and concurrency
+asyncio>=3.4.3
+
+# Database
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Logging and monitoring
+structlog>=23.1.0
+
+# Configuration
+pyyaml>=6.0
+
+# Optional: Deep Learning Frameworks (for future)
+# torch>=2.0.0
+# tensorflow>=2.13.0
+
+# Development tools
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.4.0
