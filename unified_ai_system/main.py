@@ -1,56 +1,107 @@
 #!/usr/bin/env python3
 """
-Main entry point for Unified AI System
+Point d'entrée principal du Système Unifié d'IA
 """
 
 import asyncio
 import sys
 from pathlib import Path
+import logging
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-from unified_ai_system.orchestration.integrated_unified_agent import IntegratedUnifiedAgent
-from unified_ai_system.agents.optimization_agent import OptimizationAgent
-from unified_ai_system.agents.rl_agent import RLAgent
-from unified_ai_system.agents.base_agent import Task
-from unified_ai_system.intelligence.problem_identifier import ProblemType
+# Ajouter le chemin du projet
+sys.path.insert(0, str(Path(__file__).parent))
 
+from orchestration.integrated_unified_agent import IntegratedUnifiedAgent
+from agents.base_agent import Task
+import agents.optimization_agent as opt_agent
+import agents.rl_agent as rl_agent
 
 async def main():
-    print("Starting Unified AI System...")
+    """Fonction principale"""
+    print("\n" + "="*70)
+    print("SYSTÈME UNIFIÉ D'IA - VERSION 2.0")
+    print("="*70 + "\n")
 
-    # Initialize system
-    system = IntegratedUnifiedAgent()
-    await system.initialize()
+    # 1. Initialiser le système
+    print("1. Initialisation du système...")
+    system = IntegratedUnifiedAgent("UnifiedAI_v2")
+    success = await system.initialize()
 
-    # Register agents
-    await system.register_agent(OptimizationAgent())
-    await system.register_agent(RLAgent())
+    if not success:
+        print("✗ Échec de l'initialisation")
+        return
 
-    # Create sample task
-    task = Task(
+    print("✓ Système initialisé\n")
+
+    # 2. Enregistrer les agents
+    print("2. Enregistrement des agents...")
+
+    # Note: Implémenter les vrais agents dans leurs fichiers respectifs
+    # Pour l'instant, nous utilisons des agents de base
+    await system.register_agent(opt_agent.OptimizationAgent())
+    await system.register_agent(rl_agent.RLAgent())
+
+    print("✓ Agents enregistrés\n")
+
+    # 3. Afficher le statut initial
+    print("3. Statut initial du système:")
+    status = await system.get_system_status()
+    print(f"   - Agents: {status['agents_registered']}")
+    print(f"   - Curriculum Level: {status['curriculum']['current_level']}")
+    print(f"   - Mémoire: {status['memory']['total_experiences']} expériences\n")
+
+    # 4. Démonstration avec une tâche exemple
+    print("4. Exécution d'une tâche de démonstration...")
+
+    demo_task = Task(
         task_id="demo_001",
-        problem_type=ProblemType.OPTIMIZATION,
-        description="Demo optimization task",
-        data_source="demo_data",
-        target_metric="accuracy"
+        problem_type="optimization",
+        description="Tâche de démonstration - Optimisation de hyperparamètres",
+        data_source="demo_dataset",
+        target_metric="accuracy",
+        priority=1
     )
 
-    # Solve task
-    result = await system.solve_task(task)
+    # Note: Cette démonstration nécessite des agents implémentés
+    result = await system.solve_task(demo_task)
+    print(f"   Statut: {result['status']}")
+    print(f"   Performance: {result.get('performance', 'N/A'):.2f}\n")
 
-    print(f"\\nTask completed:")
-    print(f"  Status: {result['status']}")
-    print(f"  Performance: {result['performance']:.2f}")
+    # 5. Afficher le statut final
+    print("5. Statut final du système:")
+    final_status = await system.get_system_status()
+    print(f"   - Tâches complétées: {final_status['tasks_completed']}")
+    print(f"   - Performance moyenne: {final_status['average_performance']:.2f}")
+    print(f"   - Curriculum Level: {final_status['curriculum']['current_level']}\n")
 
-    # Show system status
-    status = await system.get_system_status()
-    print(f"\\nSystem Status:")
-    print(f"  Tasks Completed: {status['tasks_completed']}")
-    print(f"  Average Performance: {status['average_performance']:.2f}")
+    # 6. Arrêt du système
+    print("6. Arrêt du système...")
+    await system.shutdown()
+    print("✓ Système arrêté proprement\n")
 
-    print("\\n✓ System demonstration completed!")
+    print("="*70)
+    print("DÉMONSTRATION TERMINÉE")
+    print("="*70)
+    print("""
+PROCHAINES ÉTAPES:
+- Implémenter les agents spécialisés dans agents/
+- Créer des environnements dans environments/
+- Lancer les tests: pytest tests/ -v
+- Consulter la documentation dans docs/
+    """)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n✓ Arrêt demandé par l'utilisateur")
+    except Exception as e:
+        print(f"\n✗ Erreur: {e}")
+        import traceback
+        traceback.print_exc()

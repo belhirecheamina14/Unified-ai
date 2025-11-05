@@ -130,7 +130,7 @@ class IntegratedUnifiedAgent:
             execution_results = []
 
             for agent_id, agent in self.execution_agents.items():
-                if agent.agent_type == task.problem_type.value:
+                if agent.agent_type == task.problem_type:
                     logger.info(f"Executing with agent: {agent_id}")
                     result = await agent.execute(task)
                     execution_results.append(result)
@@ -214,13 +214,17 @@ class IntegratedUnifiedAgent:
         if not results:
             return 0.0
 
+        # Compter les succès
+        successes = sum(1 for r in results if r.get('status') == 'success')
+        success_rate = successes / len(results)
+
         # Prendre en compte les métriques de performance si disponibles
         performances = [
-            r.get('metrics', {}).get('performance', 0.0)
-            for r in results if r.get('status') == 'success'
+            r.get('metrics', {}).get('performance', success_rate)
+            for r in results
         ]
 
-        return sum(performances) / len(performances) if performances else 0.0
+        return sum(performances) / len(performances) if performances else success_rate
 
     async def get_system_status(self) -> Dict[str, Any]:
         """Retourne le statut complet du système"""
