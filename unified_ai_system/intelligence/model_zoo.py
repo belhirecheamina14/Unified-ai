@@ -34,7 +34,7 @@ class ModelVersion:
 class ModelZoo:
     """Dépôt centralisé de modèles avec versioning et persistence"""
 
-    def __init__(self, storage_path: str = "unified_ai_system/data/models"):
+    def __init__(self, storage_path: str = "./unified_ai_system/data/models"):
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 

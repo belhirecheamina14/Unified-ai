@@ -75,11 +75,9 @@ class ScenarioGenerator:
         Returns:
             Scénario généré
         """
-        if task_type.value not in self.scenario_templates:
+        if task_type not in self.scenario_templates:
             logger.warning(f"Unknown task type: {task_type}, using default")
             task_type = 'optimization'
-        else:
-            task_type = task_type.value
 
         template = self.scenario_templates[task_type]
         base_params = template['base_params'].copy()
